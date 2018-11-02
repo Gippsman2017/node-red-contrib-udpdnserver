@@ -13,5 +13,9 @@
     "nodes": {
       "udpdnserver": "udpdnserver.js"
     }
-  }
+  },
+  "repository": {
+  "type" : "git",
+  "url" : "https://github.com/Gippsman2017/node-red-contrib-udpdnserver.git"
+}
 }
