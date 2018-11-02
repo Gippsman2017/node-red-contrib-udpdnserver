@@ -1,0 +1,205 @@
+<script type="text/x-red" data-template-name="udpdnserver">
+    <div class="form-row">
+        <label for="node-input-name"><i class="icon-tag"></i> Database </label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-address"><i class="icon-tag"></i> Listen Address </label>
+        <input type="text" id="node-input-address" placeholder="Address" style="width:150px; height:28px;">
+        <label for="node-input-port"><i class="icon-tag"></i> Listen Port </label>
+        <input type="text" id="node-input-port" placeholder="Port" style="width:60px; height:28px;"> 
+    </div>
+
+    <div class="form-row" style="position: relative; margin-bottom: 0px;">
+        <label for="node-input-template"><i class="fa fa-file-code-o"></i>
+        DNServer_Internal_and_Exported_Functions_Specified_Here</span></label>
+        <input type="hidden" id="node-input-functions" autofocus="autofocus">
+    </div>
+
+    <div class="form-row node-text-editor-row">
+        <div style="height:360px;" class="node-text-editor" id="node-input-functions-editor"></div>
+    </div>
+</script>
+
+<script type="text/x-red" data-help-name="udpdnserver">
+<p> A Node-RED node to deliver a programmable udpIPV4 DNS Server, at its heart it uses
+an in memory alaSQL Database.</p>
+<p> You can easily create new functions in the Node-Red builder at runtime,
+only one function is currently called by the underlying UDP DNS code, <b>resolveIPV4Address</b> </p>
+
+    <p>-- Cut and Paste this code below into the node for the basic udpIPV4DnsServer --</p>
+<PRE>
+<CODE>
+
+
+CREATE DATABASE UDPdnServer;
+USE DATABASE UDPdnServer;
+CREATE TABLE rr(domainName, rr,ttl);
+CREATE TABLE learnrr(domainName,lttl);
+CREATE TABLE upStreams;
+
+CREATE FUNCTION uds_insertUpstreamAddress AS ``function(address) {
+  let count = alasql('USE DATABASE UDPdnServer;SELECT address FROM upStreams WHERE address = ?',[address]);
+  let recFound = count[1].length;
+  if (recFound == 0) {
+    alasql('USE DATABASE UDPdnServer;INSERT INTO upStreams (address) VALUES (?);',[address]);
+  } 
+  return count;
+}``;
+
+CREATE FUNCTION uds_getUpstreamAddress AS ``function() {
+  let data = alasql('USE DATABASE UDPdnServer;SELECT address from upStreams rec;');
+  let addresses = data[1];
+  let count = addresses.length;
+  if (count > 0) {
+      var min=0;
+      var max=count-1;
+      var index=Math.floor(Math.random() * (max - min + 1)) + min;
+      return addresses[index];  
+   }
+else
+  return '1.1.1.1';
+}``;
+
+CREATE FUNCTION uds_checkCache AS ``function() {
+  var currentTs = Math.round(new Date().getTime()/1000);  
+  let count = alasql('USE DATABASE UDPdnServer;SELECT distinct domainName FROM rr where ttl < ?;',[currentTs] );
+  let recFound = count[1].length;
+  if (recFound) {
+  for (var i = 0; i < recFound; i++) { 
+     var domainName = count[1][i].domainName;
+     alasql('USE DATABASE UDPdnServer;delete from rr where domainName = ?;',[domainName]);
+    }      
+  };
+  return count;
+}``;
+
+CREATE FUNCTION uds_checkLearn AS ``function() {
+  var currentTs = Math.round(new Date().getTime()/1000);  
+  let count = alasql('USE DATABASE UDPdnServer;SELECT * FROM learnrr;');
+  let recFound = count[1].length;
+  if (recFound) {
+  for (var i = 0; i < recFound; i++) { 
+    if (currentTs > count[1][i].lttl) {
+       var domainName = count[1][i].domainName;
+       alasql('USE DATABASE UDPdnServer;delete from learnrr where domainName = ?;',[domainName]);
+        }
+    }      
+  };
+  return count;
+}``;
+
+CREATE FUNCTION uds_rrLearn AS ``function(domainName,lttl) {
+  let count = alasql('USE DATABASE UDPdnServer;SELECT domainName FROM learnrr WHERE domainName = ?;',[domainName]);
+  let recFound = count[1].length;
+  if (recFound == 0) {
+    alasql('USE DATABASE UDPdnServer;INSERT INTO learnrr (domainName,lttl) VALUES (?,?);',[domainName,lttl]);
+  } 
+  return count;
+}``;
+
+CREATE FUNCTION uds_rrInsert AS ``function(domainName,rr,ttl,lttl) {
+  let count = alasql('USE DATABASE UDPdnServer;SELECT * FROM rr WHERE domainName = ? and rr = ?;',[domainName,rr]);
+  let recFound = count[1].length;
+  if (recFound == 0) {
+     var currentT = Math.round(new Date().getTime() / 1000);
+     var dttl = currentT+parseInt(ttl);
+     var dlttl= currentT+parseInt(lttl);
+     count= alasql('USE DATABASE UDPdnServer;INSERT INTO rr (domainName,rr,ttl) VALUES (?,?,?);',[domainName,rr,dttl]);
+     // Start the domain learning
+     let learnrr = alasql('SELECT uds_rrLearn(?,?) learnrec;',[domainName,dlttl]);
+  } 
+  return count;
+}``;
+
+CREATE FUNCTION uds_rrParse AS ``function(domainName,typeIn,dataIn,checkLearnrr) {
+  var rrIn; 
+  if (domainName === '') { rrIn= alasql('USE DATABASE UDPdnServer;SELECT rr FROM rr' );}
+else 
+  if (checkLearnrr) { rrIn= alasql('USE DATABASE UDPdnServer; SELECT rr FROM rr where domainName = ? and not exists (select domainName from learnrr where domainName = ?);',[domainName,domainName]);}
+else
+   { rrIn= alasql('USE DATABASE UDPdnServer; SELECT rr FROM rr where domainName = "'+ domainName+'"');}
+  var outRR = [];
+  for (var i = 0; i < rrIn[1].length; i++) { 
+    if (dataIn === '')  {outRR.push(JSON.parse(rrIn[1][i].rr));}
+  else    
+    if (JSON.parse(rrIn[1][i].rr)[typeIn] == dataIn) {outRR.push(JSON.parse(rrIn[1][i].rr));}
+  }
+  return {"domainName":domainName,"rrcount":i-1,"rr":outRR}; 
+}``;
+
+
+CREATE FUNCTION uds_getIPV4Address AS ``function(domainName) {
+  let data = alasql('SELECT uds_rrParse(?,?,?,?) rec;',[domainName,'type','1',true]);
+  let addresses = data[0].rec.rr;
+  let count = addresses.length;
+  if (count > 0) {
+      var min=0;
+      var max=count-1;
+      var index=Math.floor(Math.random() * (max - min + 1)) + min;
+      return {"domainName":domainName,"type":"1","address":addresses[index].address};  
+   }
+else
+  return {"domainName":domainName,"type":"1","address":"none"};
+}``;
+
+CREATE FUNCTION uds_getIPV4cName AS ``function(domainName) {
+  let savedName = domainName;
+  let data1 = '';
+  let notdone = true;
+  do {
+    data1 = alasql('SELECT uds_rrParse(?,?,?,?) rec;',[savedName,'type','5',true]);
+    if (data1[0].rec.rr[0] != null) {
+       savedName = data1[0].rec.rr[0].data;
+    }
+    else { notdone=false; }
+    }
+  while (notdone);
+return {"domainName":domainName,"type":"5","data":savedName};
+}``;
+
+CREATE FUNCTION uds_resolveIPV4Address AS ``function(domainName) {
+  let data1 = alasql('SELECT uds_getIPV4cName(?) rec;',[domainName]);
+  domainName = data1[0].rec.data;
+  let data2 = alasql('SELECT uds_getIPV4Address(?) rec;',[domainName]);
+  return data2[0].rec;
+}``;
+ 
+</CODE> 
+</PRE>
+
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('udpdnserver', {
+        category : 'dns',
+        color    : "#d9badb",
+        inputs   : 1,
+        outputs  : 3,
+        defaults : {
+            address      : {value: '127.0.0.1'},
+            port         : {value: 53},
+            name         : {value: 'UDPdnServer'},
+            functions    : {value: 'Put the functions in Here'}
+        },
+        icon: "file.png",
+        label: function () {
+            return this.name || "";
+        },
+        labelStyle: function () {
+            return this.name ? "node_label_italic" : "";
+        },
+        oneditprepare: function () {
+            this.editor = RED.editor.createEditor({
+                id: "node-input-functions-editor",
+                mode: "ace/mode/sql",
+                value: $("#node-input-functions").val()
+            });
+        },
+        oneditsave: function () {
+            $("#node-input-functions").val(this.editor.getValue())
+            delete this.editor;
+        }
+    });
+</script>
