@@ -27,12 +27,13 @@
 an in memory alaSQL Database.</p>
 <p> You can easily create new functions in the Node-Red builder at runtime,
 only one function is currently called by the underlying UDP DNS code, <b>resolveIPV4Address</b> </p>
-
-    <p>-- Cut and Paste this code below into the node for the basic udpIPV4DnsServer --</p>
+<br>
+<p> Here is a fully functional DNS server you can paste into a flow</p>
+<a href="https://github.com/Gippsman2017/node-red-contrib-udpdnserver/blob/master/testdnsserver.flow">Demo udp IPV4 DNS</a>
+<br>
+    <p>-- Cut and Paste this code below into the node for the Default udpDnsServer alSQL function's--</p>   
 <PRE>
 <CODE>
-
-
 CREATE DATABASE UDPdnServer;
 USE DATABASE UDPdnServer;
 CREATE TABLE rr(domainName, rr,ttl);
