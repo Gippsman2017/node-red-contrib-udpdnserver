@@ -22,6 +22,14 @@ Currently ONLY IPV4 requests are resolved, although the node itself actually sto
 
 Refer to this wiki for the RR types. https://en.wikipedia.org/wiki/List_of_DNS_record_types
 
+#To Install
+```
+npm install node-red-contrib-udpdnserver
+Import the flow below into Node-Red
+set the ip address of the listener in the node eg 127.0.0.1 
+set the port is not on the default port (53)
+Try it out
+```
 Use this flow to get you started, note that on the info tab, the basic node standard functions are and will be maintained.
 --------------------------------------------------------------------------------------------------------------------------
 ```
