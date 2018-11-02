@@ -16,5 +16,9 @@ The first output is from the decision engine eg: if the result is from the cache
 
 Another capability that it has, is it allows tracking domains that requests have gone to, also, it tracks the calling address and ports the requests originated from, this is provided by the second output.
 
-Note that the input and third output are requests and responces to alaSQL and allow you to easily extend the Node.
+Note that the input and third output are for requests and responces to alaSQL and allow you to easily extend the Node.
+
+Currently ONLY IPV4 requests are resolved, although the node itself actually stores "Type 28" request for IPV6, I just havent written the functions yet.
+
+Refer to this wiki for the RR types. https://en.wikipedia.org/wiki/List_of_DNS_record_types
 
