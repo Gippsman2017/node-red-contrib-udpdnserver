@@ -6,7 +6,7 @@ The Node uses an alaSQL in memory database that can store and then cache request
 
 Cache values (on a per domain basis) for time to live (TTL) are in seconds, after that it deletes the entry(s) and starts learning again.
 
-The Cache learning algorythm (LTTL) is in seconds, it allows (on a per domain basis) the ability to learn about multiple addresses or requests, for example, if the LTTL is set to 60, and multiple command line "nslookup www.google.com" requests are performed by the user, then all of the addresses received by the cache are randomly send back to the user on susequent cached requests, this is done until the domain TTL has expired and it then flushed the RR cache and the learning is started again.
+The Cache learning algorythm (LTTL) is in seconds, it allows (on a per domain basis) the ability to learn about multiple addresses or requests, for example, if the LTTL is set to 60, and multiple command line "nslookup www.google.com" requests are performed by the user, then all of the addresses received by the cache are randomly sent back to the user on susequent cached requests, this is done until the domain TTL has expired and it then flushes the RR (Resource Request) cache and the learning is started again.
 
 Note all RR types are intercepted and then made available to the cache,user's can decide tofurther process them in their own Node-Red processes and/or cache.
 
