@@ -3,6 +3,8 @@
   "version": "1.0.1",
   "description": "A Node-RED node .",
   "dependencies": {
+    "alasql": "^0.4.11",
+    "native-dns-packet": "^0.1.1"
   },
   "keywords": [
     "node-red"
