@@ -6,6 +6,7 @@
     "alasql": "^0.4.11",
     "native-dns-packet": "^0.1.1"
   },
+  "licence": "Apache V2.0",
   "keywords": [
     "node-red",
     "udp",
