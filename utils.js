@@ -21,9 +21,9 @@ function recombinationQuestion (msg) {
     return Buffer.concat([ids, flag, qCount, aCount, other])
 }
 
-function resolve (msg, upstream, cb) {
+function resolve (msg, upport, upstream, cb) {
     let udp = dgram.createSocket('udp4');
-    udp.send(msg, 53, upstream);
+    udp.send(msg, upport, upstream);
     udp.on('timeout', function () {
         udp.close()
     })
