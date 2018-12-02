@@ -38,20 +38,42 @@ CREATE DATABASE UDPdnServer;
 USE DATABASE UDPdnServer;
 CREATE TABLE rr(domainName, rr,ttl);
 CREATE TABLE learnrr(domainName,lttl);
-CREATE TABLE upStreams;
+CREATE TABLE upStreams(address,port);
 
-CREATE FUNCTION uds_insertUpstreamAddress AS ``function(address) {
-  let count = alasql('USE DATABASE UDPdnServer;SELECT address FROM upStreams WHERE address = ?',[address]);
+CREATE FUNCTION uds_getCachedRr AS ``function() {
+  let data = alasql('USE DATABASE UDPdnServer; SELECT domainName FROM rr where not exists (select domainName from learnrr);');
+  return data[1]
+}``;
+
+CREATE FUNCTION uds_getCountCachedRr AS ``function() {
+  let data = alasql('USE DATABASE UDPdnServer; SELECT domainName FROM rr where not exists (select domainName from learnrr);');
+  return data[1].length;
+}``;
+
+CREATE FUNCTION uds_getRrCount AS ``function() {
+  let data = alasql('USE DATABASE UDPdnServer;SELECT count(*) rrcount from rr;');
+  return data[1];
+}``;
+
+CREATE FUNCTION uds_getLearnCount AS ``function() {
+  let data = alasql('USE DATABASE UDPdnServer;SELECT count(*) learnrrcount from learnrr;');
+  return data[1];
+}``;
+
+CREATE FUNCTION uds_insertUpstreamAddress AS ``function(address,port) {
+  port = port ||53;
+  let count = alasql('USE DATABASE UDPdnServer;SELECT address,port FROM upStreams WHERE address = ?',[address]);
   let recFound = count[1].length;
   if (recFound == 0) {
-    alasql('USE DATABASE UDPdnServer;INSERT INTO upStreams (address) VALUES (?);',[address]);
+    alasql('USE DATABASE UDPdnServer;INSERT INTO upStreams (address,port) VALUES (?,?);',[address,port]);
   } 
   return count;
 }``;
 
 CREATE FUNCTION uds_getUpstreamAddress AS ``function() {
-  let data = alasql('USE DATABASE UDPdnServer;SELECT address from upStreams rec;');
+  let data = alasql('USE DATABASE UDPdnServer;SELECT address,port from upStreams rec;');
   let addresses = data[1];
+  console.log('ADDRESSES = ',addresses);
   let count = addresses.length;
   if (count > 0) {
       var min=0;
@@ -130,7 +152,6 @@ else
   return {"domainName":domainName,"rrcount":i-1,"rr":outRR}; 
 }``;
 
-
 CREATE FUNCTION uds_getIPV4Address AS ``function(domainName) {
   let data = alasql('SELECT uds_rrParse(?,?,?,?) rec;',[domainName,'type','1',true]);
   let addresses = data[0].rec.rr;
@@ -166,7 +187,7 @@ CREATE FUNCTION uds_resolveIPV4Address AS ``function(domainName) {
   let data2 = alasql('SELECT uds_getIPV4Address(?) rec;',[domainName]);
   return data2[0].rec;
 }``;
- 
+  
 </CODE> 
 </PRE>
 
