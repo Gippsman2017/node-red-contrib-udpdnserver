@@ -14,9 +14,13 @@ One designed capabilty is that the Node is programmable in the Node-Red builder,
 
 The first output is from the decision engine eg: if the result is from the cache or from the upstream DNS resolver, you can add as many upstream resolvers as you like, a random selection is applied select an upstream DNS resolver.
 Note that upstream resolvers can have a different port number and this can be set by way of addrress and port for example
+
 msg1.sql="select uds_insertUpstreamAddress('8.8.4.4',5353) rr";
+
 msg1.sql="select uds_insertUpstreamAddress('8.8.4.4',53) rr";
+
 msg1.sql="select uds_insertUpstreamAddress('8.8.4.4') rr";    // use default 53
+
 This allows you to cascade node-red-contrib-updnserver nodes and provide zoning.
 
 Another capability that it has, is it allows tracking domains that requests have gone to, also, it tracks the calling address and ports the requests originated from, this is provided by the second output.
