@@ -8,11 +8,16 @@ Cache values (on a per domain basis) for time to live (TTL) are in seconds, afte
 
 The Cache learning algorythm (LTTL) is in seconds, it allows (on a per domain basis) the ability to learn about multiple addresses or requests, for example, if the LTTL is set to 60, and multiple command line "nslookup www.google.com" requests are performed by the user, then all of the addresses received by the cache are randomly sent back to the user on susequent cached requests, this is done until the domain TTL has expired and it then flushes the RR (Resource Request) cache and the learning is started again.
 
-Note all RR types are intercepted and then made available to the cache,user's can decide tofurther process them in their own Node-Red processes and/or cache.
+Note all RR types are intercepted and then made available to the cache,user's can decide to further process them in their own Node-Red processes and/or cache.
 
 One designed capabilty is that the Node is programmable in the Node-Red builder, it allows users to add alaSQL SQL/Javascript functions and tables - functionality to extend the Node.
 
 The first output is from the decision engine eg: if the result is from the cache or from the upstream DNS resolver, you can add as many upstream resolvers as you like, a random selection is applied select an upstream DNS resolver.
+Note that upstream resolvers can have a different port number and this can be set by way of addrress and port for example
+msg1.sql="select uds_insertUpstreamAddress('8.8.4.4',5353) rr";
+msg1.sql="select uds_insertUpstreamAddress('8.8.4.4',53) rr";
+msg1.sql="select uds_insertUpstreamAddress('8.8.4.4') rr";    // use default 53
+This allows you to cascade node-red-contrib-updnserver nodes and provide zoning.
 
 Another capability that it has, is it allows tracking domains that requests have gone to, also, it tracks the calling address and ports the requests originated from, this is provided by the second output.
 
@@ -27,7 +32,7 @@ Refer to this wiki for the RR types. https://en.wikipedia.org/wiki/List_of_DNS_r
 npm install node-red-contrib-udpdnserver
 Import the flow below into Node-Red
 set the ip address of the listener in the node eg 127.0.0.1 
-set the port is not on the default port (53)
+set the port if not on the default port (53)
 point resolv.conf to this address
 Try it out
 ```
