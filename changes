@@ -1,3 +1,4 @@
 v1.06 Added upstream dns server port capability, this now enables the user to cascade the updnserver nodes to create a zoned system.
+      Added some changes to the info pane to reflect the stats capability of the DB.
 
 v1.05 Original Version
