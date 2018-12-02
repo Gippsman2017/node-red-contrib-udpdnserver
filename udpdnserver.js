@@ -3,6 +3,7 @@ module.exports = function(RED) {
    // Gippsman2017/node-red-contrib-udpdnserver
    
 "use strict";
+
 const dgram      = require('dgram');// UDP inputs
 const response   = require('./response.js');
 const utils      = require('./utils.js');
@@ -10,6 +11,7 @@ const packet	 = require('../native-dns-packet');
 const path       = require('path');
 var   udpServer  = null;
 var   upstream   = '';    // hold the upstream dns server address
+var   upport     = 53;    // hold the upstream dns server port 
 var   alasql     = require('alasql');
 
 function udpdnsServerNode(config) {
@@ -102,9 +104,10 @@ function udpdnsServerNode(config) {
         {
         msg1.sql='select uds_getUpstreamAddress() rr';
         doSQL(msg1).then (result => {
+          upport   = result.sqlResult[0].rr.port;
           upstream = result.sqlResult[0].rr.address;
           });
-        utils.resolve(msg, upstream, function (data) {
+        utils.resolve(msg, upport, upstream, function (data) {
           let result = packet.parse(data);
           if (result.answer.length === 0) { //No-one knows about his domain
             node.send([
@@ -131,4 +134,4 @@ function udpdnsServerNode(config) {
 //------------------------------------------------------- Register this Node --------------------------------
     RED.nodes.registerType("udpdnserver", udpdnsServerNode);
 }    
-    
+   
