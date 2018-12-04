@@ -36,17 +36,33 @@ only one function is currently called by the underlying UDP DNS code, <b>resolve
 <CODE>
 CREATE DATABASE UDPdnServer;
 USE DATABASE UDPdnServer;
-CREATE TABLE rr(domainName, rr,ttl);
-CREATE TABLE learnrr(domainName,lttl);
+CREATE TABLE rr(zoneName,domainName, rr,ttl);
+CREATE TABLE learnrr(zoneName,domainName,lttl);
 CREATE TABLE upStreams(address,port);
+CREATE TABLE zones(zoneName,addressMask);
+
+CREATE FUNCTION uds_insertZone AS ``function(zoneName,addressMask) {
+  let count = alasql('USE DATABASE UDPdnServer;SELECT zoneName,addressMask FROM zones WHERE zoneName = ? and addressMask = ?',[zoneName,addressMask]);
+  let recFound = count[1].length;
+  if (recFound == 0) {
+    alasql('USE DATABASE UDPdnServer;INSERT INTO zones (zoneName,addressMask) VALUES (?,?);',[zoneName,addressMask]);
+  } 
+  return count;
+}``;
+
+CREATE FUNCTION uds_getZoneAddressMask AS ``function(zoneName) {
+  let data = alasql('USE DATABASE UDPdnServer;SELECT zoneName,addressMask from zones where zoneName = ?;',[zoneName]);
+  let addresses = data[1];
+  return addresses;
+}``;
 
 CREATE FUNCTION uds_getCachedRr AS ``function() {
-  let data = alasql('USE DATABASE UDPdnServer; SELECT domainName FROM rr where not exists (select domainName from learnrr);');
+  let data = alasql('USE DATABASE UDPdnServer; SELECT zoneName,domainName FROM rr where not exists (select zoneName,domainName from learnrr);');
   return data[1]
 }``;
 
 CREATE FUNCTION uds_getCountCachedRr AS ``function() {
-  let data = alasql('USE DATABASE UDPdnServer; SELECT domainName FROM rr where not exists (select domainName from learnrr);');
+  let data = alasql('USE DATABASE UDPdnServer; SELECT zoneName,domainName FROM rr where not exists (select zoneName,domainName from learnrr);');
   return data[1].length;
 }``;
 
@@ -61,8 +77,7 @@ CREATE FUNCTION uds_getLearnCount AS ``function() {
 }``;
 
 CREATE FUNCTION uds_insertUpstreamAddress AS ``function(address,port) {
-  port = port ||53;
-  let count = alasql('USE DATABASE UDPdnServer;SELECT address,port FROM upStreams WHERE address = ?',[address]);
+  let count = alasql('USE DATABASE UDPdnServer;SELECT address FROM upStreams WHERE address = ?',[address]);
   let recFound = count[1].length;
   if (recFound == 0) {
     alasql('USE DATABASE UDPdnServer;INSERT INTO upStreams (address,port) VALUES (?,?);',[address,port]);
@@ -73,7 +88,6 @@ CREATE FUNCTION uds_insertUpstreamAddress AS ``function(address,port) {
 CREATE FUNCTION uds_getUpstreamAddress AS ``function() {
   let data = alasql('USE DATABASE UDPdnServer;SELECT address,port from upStreams rec;');
   let addresses = data[1];
-  console.log('ADDRESSES = ',addresses);
   let count = addresses.length;
   if (count > 0) {
       var min=0;
@@ -106,88 +120,106 @@ CREATE FUNCTION uds_checkLearn AS ``function() {
   for (var i = 0; i < recFound; i++) { 
     if (currentTs > count[1][i].lttl) {
        var domainName = count[1][i].domainName;
-       alasql('USE DATABASE UDPdnServer;delete from learnrr where domainName = ?;',[domainName]);
+       var zoneName   = count[1][i].zoneName;
+       alasql('USE DATABASE UDPdnServer;delete from learnrr where zoneName = ? and domainName = ?;',[zoneName,domainName]);
         }
     }      
   };
   return count;
 }``;
 
-CREATE FUNCTION uds_rrLearn AS ``function(domainName,lttl) {
-  let count = alasql('USE DATABASE UDPdnServer;SELECT domainName FROM learnrr WHERE domainName = ?;',[domainName]);
+CREATE FUNCTION uds_rrLearn AS ``function(zoneName,domainName,lttl) {
+  let count = alasql('USE DATABASE UDPdnServer;SELECT domainName FROM learnrr WHERE zoneName = ? and domainName = ?;',[zoneName,domainName]);
   let recFound = count[1].length;
   if (recFound == 0) {
-    alasql('USE DATABASE UDPdnServer;INSERT INTO learnrr (domainName,lttl) VALUES (?,?);',[domainName,lttl]);
+    alasql('USE DATABASE UDPdnServer;INSERT INTO learnrr (zoneName,domainName,lttl) VALUES (?,?,?);',[zoneName,domainName,lttl]);
   } 
   return count;
 }``;
 
-CREATE FUNCTION uds_rrInsert AS ``function(domainName,rr,ttl,lttl) {
-  let count = alasql('USE DATABASE UDPdnServer;SELECT * FROM rr WHERE domainName = ? and rr = ?;',[domainName,rr]);
+CREATE FUNCTION uds_rrInsert AS ``function(zoneName,domainName,rr,ttl,lttl) {
+  let count = alasql('USE DATABASE UDPdnServer;SELECT * FROM rr WHERE zoneName = ? and domainName = ? and rr = ?;',[zoneName,domainName,rr]);
   let recFound = count[1].length;
   if (recFound == 0) {
      var currentT = Math.round(new Date().getTime() / 1000);
      var dttl = currentT+parseInt(ttl);
      var dlttl= currentT+parseInt(lttl);
-     count= alasql('USE DATABASE UDPdnServer;INSERT INTO rr (domainName,rr,ttl) VALUES (?,?,?);',[domainName,rr,dttl]);
+     count= alasql('USE DATABASE UDPdnServer;INSERT INTO rr (zoneName,domainName,rr,ttl) VALUES (?,?,?,?);',[zoneName,domainName,rr,dttl]);
      // Start the domain learning
-     let learnrr = alasql('SELECT uds_rrLearn(?,?) learnrec;',[domainName,dlttl]);
+     let learnrr = alasql('SELECT uds_rrLearn(?,?,?) learnrec;',[zoneName,domainName,dlttl]);
   } 
   return count;
 }``;
 
-CREATE FUNCTION uds_rrParse AS ``function(domainName,typeIn,dataIn,checkLearnrr) {
+CREATE FUNCTION uds_rrReplace AS ``function(zoneName,domainName,rr,ttl,lttl) {
+  let count = alasql('USE DATABASE UDPdnServer;DELETE FROM rr WHERE zoneName = ? and domainName = ?;',[zoneName,domainName]);
+  var currentT = Math.round(new Date().getTime() / 1000);
+  var dttl = currentT+parseInt(ttl);
+  var dlttl= currentT+parseInt(lttl);
+  count= alasql('USE DATABASE UDPdnServer;INSERT INTO rr (zoneName,domainName,rr,ttl) VALUES (?,?,?,?);',[zoneName,domainName,rr,dttl]);
+  // Start the domain learning
+  let learnrr = alasql('SELECT uds_rrLearn(?,?,?) learnrec;',[zoneName,domainName,dlttl]);
+  return count;
+}``;
+
+CREATE FUNCTION uds_rrParse AS ``function(zoneName,domainName,typeIn,dataIn,checkLearnrr) {
   var rrIn; 
   if (domainName === '') { rrIn= alasql('USE DATABASE UDPdnServer;SELECT rr FROM rr' );}
 else 
-  if (checkLearnrr) { rrIn= alasql('USE DATABASE UDPdnServer; SELECT rr FROM rr where domainName = ? and not exists (select domainName from learnrr where domainName = ?);',[domainName,domainName]);}
+  if (checkLearnrr) { rrIn= alasql('USE DATABASE UDPdnServer; SELECT rr FROM rr where zoneName = ? and domainName = ? and not exists (select zoneName,domainName from learnrr where zoneName = ? and domainName = ?);',[zoneName,domainName,zoneName,domainName]);}
 else
-   { rrIn= alasql('USE DATABASE UDPdnServer; SELECT rr FROM rr where domainName = "'+ domainName+'"');}
+   { rrIn= alasql('USE DATABASE UDPdnServer; SELECT rr FROM rr where zoneName = ? and domainName = ?;',[zoneName,domainName]);}
   var outRR = [];
   for (var i = 0; i < rrIn[1].length; i++) { 
     if (dataIn === '')  {outRR.push(JSON.parse(rrIn[1][i].rr));}
   else    
     if (JSON.parse(rrIn[1][i].rr)[typeIn] == dataIn) {outRR.push(JSON.parse(rrIn[1][i].rr));}
   }
-  return {"domainName":domainName,"rrcount":i-1,"rr":outRR}; 
+  return {"zoneName":zoneName,"domainName":domainName,"rrcount":i-1,"rr":outRR}; 
 }``;
 
-CREATE FUNCTION uds_getIPV4Address AS ``function(domainName) {
-  let data = alasql('SELECT uds_rrParse(?,?,?,?) rec;',[domainName,'type','1',true]);
+
+CREATE FUNCTION uds_getIPV4Address AS ``function(zoneName,domainName) {
+  let data = alasql('SELECT uds_rrParse(?,?,?,?,?) rec;',[zoneName,domainName,'type','1',true]);
   let addresses = data[0].rec.rr;
   let count = addresses.length;
   if (count > 0) {
       var min=0;
       var max=count-1;
       var index=Math.floor(Math.random() * (max - min + 1)) + min;
-      return {"domainName":domainName,"type":"1","address":addresses[index].address};  
+      return {"zoneName":zoneName,"domainName":domainName,"type":"1","address":addresses[index].address};  
    }
 else
-  return {"domainName":domainName,"type":"1","address":"none"};
+  return {"zoneName":zoneName,"domainName":domainName,"type":"1","address":"none"};
 }``;
 
-CREATE FUNCTION uds_getIPV4cName AS ``function(domainName) {
+CREATE FUNCTION uds_getIPV4cName AS ``function(zoneName,domainName) {
   let savedName = domainName;
   let data1 = '';
   let notdone = true;
   do {
-    data1 = alasql('SELECT uds_rrParse(?,?,?,?) rec;',[savedName,'type','5',true]);
+    data1 = alasql('SELECT uds_rrParse(?,?,?,?,?) rec;',[zoneName,savedName,'type','5',true]);
     if (data1[0].rec.rr[0] != null) {
        savedName = data1[0].rec.rr[0].data;
     }
     else { notdone=false; }
     }
   while (notdone);
-return {"domainName":domainName,"type":"5","data":savedName};
+return {"zoneName":zoneName,"domainName":domainName,"type":"5","data":savedName};
 }``;
 
-CREATE FUNCTION uds_resolveIPV4Address AS ``function(domainName) {
-  let data1 = alasql('SELECT uds_getIPV4cName(?) rec;',[domainName]);
+CREATE FUNCTION uds_resolveIPV4Address AS ``function(zoneName,domainName) {
+  let data1 = alasql('SELECT uds_getIPV4cName(?,?) rec;',[zoneName,domainName]);
   domainName = data1[0].rec.data;
-  let data2 = alasql('SELECT uds_getIPV4Address(?) rec;',[domainName]);
+  let data2 = alasql('SELECT uds_getIPV4Address(?,?) rec;',[zoneName,domainName]);
   return data2[0].rec;
 }``;
-  
+
+CREATE FUNCTION uds_getZoneNames AS ``function() {
+  let data = alasql('USE DATABASE UDPdnServer;SELECT * from zones');
+  return data[1];  
+}``;
+
 </CODE> 
 </PRE>
 
