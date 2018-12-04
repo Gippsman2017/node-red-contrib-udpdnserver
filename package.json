@@ -1,10 +1,11 @@
 {
   "name": "node-red-contrib-udpdnserver",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "A Node-RED node .",
   "dependencies": {
     "alasql": "^0.4.11",
-    "native-dns-packet": "^0.1.1"
+    "native-dns-packet": "^0.1.1",
+    "netmask": "^1.0.6"
   },
   "licence": "Apache V2.0",
   "keywords": [
