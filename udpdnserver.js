@@ -1,6 +1,6 @@
 module.exports = function(RED) {
 
-   // Gippsman2017/node-red-contrib-udpdnserver
+   // Gippsman2017/node-red-contrib-udpdnserver v1.07
    
 "use strict";
 
@@ -9,6 +9,7 @@ const response   = require('./response.js');
 const utils      = require('./utils.js');
 const packet	 = require('../native-dns-packet');
 const path       = require('path');
+const netmask    = require('netmask').Netmask;
 var   udpServer  = null;
 var   upstream   = '';    // hold the upstream dns server address
 var   upport     = 53;    // hold the upstream dns server port 
@@ -80,58 +81,63 @@ function udpdnsServerNode(config) {
      let domain   = utils.getDomain(msg);
      let ip       = ''; 
      let msg1     = {};
-     //  get a random address from the cache for this domain 
-     msg1.sql='select uds_resolveIPV4Address("'+domain+'") rr;';
+     // Find out what Zone I am in
+     let zoneName = '';
+     msg1.sql = 'select uds_getZoneNames() rr;';
      doSQL(msg1).then (result => {
-     let address = result.sqlResult[0].rr["address"];
-     if  (address != 'none') {
-        node.send([null,null,{payload:'CACHED',sql:'CACHED RESULT',sqlResult:result.sqlResult[0].rr}]); 
-        ip = address;
-        };
-     let cName = '';
-     let addr  = '';
-     let rr    = {};
-     if (ip) { // Ok, it's in my cache
-        let answer = response(msg, ip);
-        let result = Buffer.concat([question,answer]);
-        node.send([
-            {payload:{result:"cached",dns:'127.0.0.1',domain:domain,toAddr:info.address,toPort:info.port,cName:cName,addr:ip,rr:rr}},
-            {payload:packet.parse(result),infoAddr:info.address,infoPort:info.port},
-            null]);
-        udpServer.send(result, info.port, info.address) //Send this result to the caller.
-        } 
-     else // Ok, it wasnt in my cache so go and resolve it upstream
-        {
-        msg1.sql='select uds_getUpstreamAddress() rr';
-        doSQL(msg1).then (result => {
-          upport   = result.sqlResult[0].rr.port;
-          upstream = result.sqlResult[0].rr.address;
-          });
-        utils.resolve(msg, upport, upstream, function (data) {
-          let result = packet.parse(data);
-          if (result.answer.length === 0) { //No-one knows about his domain
-            node.send([
-             {payload:{result:"nxdomain",dns:upstream,domain:domain,toAddr:info.address,toPort:info.port,addr:addr,rr:rr}},
-             {payload:data,infoAddr:info.address,infoPort:info.port},
-             null
-              ]);
-            }
-//       else // The upstream dns found it.
-//          {
-//          }
-          
-          node.send([
-            {payload:{result:"resolved",dns:upstream,domain:domain,infoAddr:info.address,toPort:info.port,cName:cName,addr:addr,rr:result.answer}},
-            {payload:result,infoAddr:info.address,infoPort:info.port},
-            null]);
-          udpServer.send(data, info.port, info.address); //Send this result to the calling client
-          }); // utils.resolve
-        }
-       });   
-     }) //udpServer.on
-    }
-
+       let zcount = result.sqlResult[0].rr.length;
+       for (var i = 0; i < zcount; i++) { 
+          var zonerec =  new netmask(result.sqlResult[0].rr[i].addressMask);
+          if (zonerec.contains(info.address)) {
+            zoneName = result.sqlResult[0].rr[i].zoneName;
+            zonerec = null;
+            break;
+          };
+        }      
+       // If possible get a random cached address for the domain from the cache for this domain 
+       msg1.sql='select uds_resolveIPV4Address("'+zoneName+'","'+domain+'") rr;';
+       doSQL(msg1).then (result => {
+         let address = result.sqlResult[0].rr["address"];
+         if (address != 'none') {
+           node.send([null,null,{payload:'CACHED',zone:zoneName,toAddr:info.address,toPort:info.port,sql:'CACHED RESULT',sqlResult:result.sqlResult[0].rr}]); 
+           ip = address;
+         };
+         let cName = '';
+         let addr  = '';
+         let rr    = {};
+         if (ip) { // Ok, it's in my cache
+           let answer = response(msg, ip);
+           let result = Buffer.concat([question,answer]);
+           node.send([
+              {payload:{result:"cached",dns:'127.0.0.1',zone:zoneName,domain:domain,toAddr:info.address,toPort:info.port,cName:cName,addr:ip,rr:rr}},
+              {payload:packet.parse(result),zone:zoneName,infoAddr:info.address,infoPort:info.port}, null]);
+           udpServer.send(result, info.port, info.address) //Send this result to the caller.
+         } 
+       else // Ok, it wasnt in my cache so go and resolve it upstream
+         {
+           msg1.sql='select uds_getUpstreamAddress() rr;';
+           doSQL(msg1).then (result => {
+             upport   = result.sqlResult[0].rr.port;
+             upstream = result.sqlResult[0].rr.address;
+             utils.resolve(msg, upport, upstream, function (data) {
+               let result = packet.parse(data);
+               if (result.answer.length === 0) { //No-one knows about his domain
+                node.send([
+                {payload:{result:"nxdomain",dns:upstream,zone:zoneName,domain:domain,toAddr:info.address,toPort:info.port,addr:addr,rr:rr}},
+                {payload:data,zone:zoneName,infoAddr:info.address,infoPort:info.port},null]);
+               }
+         // else {} // The upstream dns found it.
+             node.send([
+              {payload:{result:"resolved",dns:upstream,zone:zoneName,domain:domain,infoAddr:info.address,toPort:info.port,cName:cName,addr:addr,rr:result.answer}},
+              {payload:result,zone:zoneName,infoAddr:info.address,infoPort:info.port},null]);
+             udpServer.send(data,info.port, info.address); //Send this result to the calling client
+             }); // utils.resolve
+           }); //upstream address
+         } //cache empty resolve it upstream
+       }); // resolve IPV4 address   
+     }); //resolve zone
+   }) //udpServer.on
+} // function
 //------------------------------------------------------- Register this Node --------------------------------
     RED.nodes.registerType("udpdnserver", udpdnsServerNode);
 }    
-   
