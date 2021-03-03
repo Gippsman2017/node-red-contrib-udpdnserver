@@ -3,7 +3,7 @@
   "version": "1.0.7",
   "description": "A Node-RED node .",
   "dependencies": {
-    "alasql": "^0.4.11",
+    "alasql": "^0.7.0",
     "native-dns-packet": "^0.1.1",
     "netmask": "^1.0.6"
   },
